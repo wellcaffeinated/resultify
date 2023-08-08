@@ -1,5 +1,9 @@
 export const SymbolResult = Symbol('Result')
 
+function isPromise(thing: any): thing is Promise<any> {
+  return thing && typeof thing.then === 'function'
+}
+
 export type ResultOk<R> = {
   value: R,
   ok: true,
@@ -54,10 +58,23 @@ export interface ResultFn<R, E extends Error> {
   (...a: any[]): Result<R, E>
 }
 
-export function resultify<R, E extends Error>(fn: Fn<R>): ResultFn<R, E> {
+export interface FnAsync<R> {
+  (...a: any[]): Promise<R>
+}
+
+export interface ResultFnAsync<R, E extends Error> {
+  (...a: any[]): Promise<Result<R, E>>
+}
+
+export function resultify<R, E extends Error>(fn: FnAsync<R>): ResultFnAsync<R, E>
+export function resultify<R, E extends Error>(fn: Fn<R>): ResultFn<R, E>
+export function resultify<R>(fn: Fn<R> | FnAsync<R>) {
   return function(...args: any[]) {
     try {
       const value = fn(...args)
+      if (isPromise(value)) {
+        return value.then(ok).catch(fail)
+      }
       return ok(value)
     } catch (e){
       return fail(e)
