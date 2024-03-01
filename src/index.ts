@@ -66,9 +66,13 @@ export interface ResultFnAsync<R, E extends Error> {
   (...a: any[]): Promise<Result<R, E>>
 }
 
+export function resultify<R, E extends Error>(p: Promise<R>): Promise<Result<R, E>>
 export function resultify<R, E extends Error>(fn: FnAsync<R>): ResultFnAsync<R, E>
 export function resultify<R, E extends Error>(fn: Fn<R>): ResultFn<R, E>
-export function resultify<R>(fn: Fn<R> | FnAsync<R>) {
+export function resultify<R>(fn: Fn<R> | FnAsync<R> | Promise<R>) {
+  if (isPromise(fn)) {
+    return fn.then(ok).catch(fail)
+  }
   return function(...args: any[]) {
     try {
       const value = fn(...args)

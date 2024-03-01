@@ -3,7 +3,9 @@ import { resultify, ok, fail, isOk, isFailed } from './index'
 describe('resultify', () => {
   const good = (n) => n
   const bad = () => { throw new Error('Some Error') }
-  
+  const eventuallyGood = (n) => Promise.resolve(n)
+  const eventuallyBad = () => Promise.reject(new Error('Some Error'))
+
   test('converts regular function into result function', () => {
     const goodr = resultify(good)
     expect(goodr(3)).toMatchObject({
@@ -23,10 +25,17 @@ describe('resultify', () => {
   })
 
   test('converts async functions correctly', () => {
-    const eventuallyOk = resultify((n) => Promise.resolve(n))
+    const eventuallyOk = resultify(eventuallyGood)
     expect(eventuallyOk(4)).resolves.toEqual(ok(4))
-    const eventuallyFails = resultify(() => Promise.reject(new Error('some error')))
-    expect(eventuallyFails()).resolves.toEqual(fail('some error'))
+    const eventuallyFails = resultify(eventuallyBad)
+    expect(eventuallyFails()).resolves.toEqual(fail('Some Error'))
+  })
+
+  test('converts promises into async results', async () => {
+    const resultOk = await resultify(eventuallyGood(4))
+    expect(resultOk).toEqual(ok(4))
+    const resultFail = await resultify(eventuallyBad())
+    expect(resultFail).toEqual(fail('Some Error'))
   })
 
   test('identifies ok/fail results', () => {

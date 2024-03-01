@@ -7,21 +7,43 @@ Use the RUST-inspired Result pattern in javascript.
 Consider this:
 
 ```js
-// search two databases
+// fetch from some db
 let item
 try {
-  const db1 = await connect('somedb://localhost')
-  item = await db1.fetch(query)
+  const db = await connect('somedb://localhost')
+  const text = await db.fetch(query)
+  item = JSON.parse(text)
 } catch (e) {
-  // hmm did i fail to connect? or did i not find it?
-}
-try {
-  const db2 = await connect('somedb://remote')
-  item = await db2.fetch(query)
-} catch (e) {
-  // how do i notify the user what happened...?
+  // hmm did i fail to connect? or did i not find it? Or... did it fail to parse json
 }
 return item
+```
+
+Maybe you could do this...
+
+```js
+// fetch from some db
+let db
+let item
+try {
+  db = await connect('somedb://localhost')
+} catch (e) {
+  throw new DbConnectionError('Could not connect to database')
+}
+let text
+try {
+  text = await db.fetch(query)
+  if (!text) {
+    throw new NotFound()
+  }
+} catch (e) {
+  throw new DataRetrievalError('Failed to retrieve entry from database')
+}
+try {
+  return JSON.parse(text)
+} catch (e) {
+  throw new MalformedDataError('Data is corrupted')
+}
 ```
 
 Try this instead:
@@ -29,22 +51,24 @@ Try this instead:
 ```js
 const connectToDb = resultify(connect)
 const retrieve = resultify((db, query) => db?.fetch(query))
+const parseJson = resultify(o => JSON.parse(o))
 
-const conn1 = await connectToDb('somedb://localhost')
-const conn2 = await connectToDb('somedb://remote')
-if (conn1.failed && conn2.failed){
-  throw new DbConnectionError('Could not connect to either database')
+const conn = await connectToDb('somedb://localhost')
+if (conn.failed){
+  throw new DbConnectionError('Could not connect to database')
 }
-const attempt1 = await retrieve(conn1.value, query)
-const attempt2 = await retrieve(conn2.value, query)
-if (attempt1.failed && attempt2.failed){
+const record = await retrieve(conn.value, query)
+if (record.failed){
   throw new DataRetrievalError('Failed to retrieve entry from database')
 }
-const value = attempt1.value ?? attempt2.value
-if (!value){
+if (!record.value){
   throw new NotFound()
 }
-return value
+const json = parseJson(record.value)
+if (json.failed){
+  throw new MalformedDataError('Data is corrupted')
+}
+return json.value
 ```
 
 ## Install
@@ -131,6 +155,8 @@ if (res.failed){
 
 `resultify(fn)` - convert a sync or async function to return a result
 
+`resultify(promise)` - convert a promise to an async result
+
 `ok(value)` - create an OK result with value
 
 `fail(errorOrString)` - create a FAILED result with specified error or generic error from specified string
@@ -145,4 +171,3 @@ if (res.failed){
 
 - [No-Try](https://github.com/Coly010/no-try)
 - [resultify](https://github.com/Raynos/resultify) (For node.js style callbacks)
-
